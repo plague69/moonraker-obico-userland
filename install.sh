@@ -2,7 +2,7 @@
 
 set -e
 
-OBICO_DIR=$(realpath $(dirname "$0"))
+OBICO_DIR="${HOME}/moonraker-obico"
 
 . "${OBICO_DIR}/scripts/funcs.sh"
 
@@ -28,13 +28,11 @@ usage() {
   cat <<EOF
 Usage: $0 <[global_options]>   # Let me discover moonraker settings. Recommended if you have only 1 printer
        $0 <[global_options]> <[moonraker_setting_options]>   # Recommended for multiple-printer setup
-
 Global options:
           -f   Reset moonraker-obico config file, including removing the linked printer
           -s   Recreate the system service even if one already existed
           -L   Skip the step to link to the Obico server.
           -u   Show uninstallation instructions
-
 Moonraker setting options (${yellow}if any of them are specified, all need to be specified${default}):
           -n   The "name" that will be appended to the end of the system service name and log file. Useful only in multi-printer setup.
           -H   Moonraker server hostname or ip address
@@ -49,7 +47,6 @@ manual_setting_warning() {
   cat <<EOF
 ${yellow}
 We couldn't automatically detect the settings. Please enter them below to continue.
-
 !!!WARNING: Manually entering the Moonraker settings can be error prone.
 We highly recommend using KIAUH if you have a non-standard Klipper installation, e.g., running multiple Moonraker instances.
 ${default}
@@ -144,8 +141,8 @@ ensure_deps() {
   report_status "Installing required system packages... You may be prompted to enter password."
 
   PKGLIST="python3 python3-pip python3-venv ffmpeg"
-  sudo apt-get update --allow-releaseinfo-change
-  sudo apt-get install --yes ${PKGLIST}
+  #sudo apt-get update --allow-releaseinfo-change
+  #sudo apt-get install --yes ${PKGLIST}
 
   echo -e ""
   ensure_venv
@@ -185,7 +182,6 @@ ${default}
 Now tell us what Obico Server you want to link your printer to.
 You can use a self-hosted Obico Server or the Obico Cloud. For more information, please visit: https://obico.io.
 For self-hosted server, specify "http://server_ip:port". For instance, http://192.168.0.5:3334.
-
 EOF
     read -p "The Obico Server (Don't change unless you are linking to a self-hosted Obico Server): " -e -i "https://app.obico.io" user_input
     echo ""
@@ -196,15 +192,12 @@ EOF
   cat <<EOF > "${OBICO_CFG_FILE}"
 [server]
 url = ${OBICO_SERVER}
-
 [moonraker]
 host = ${MOONRAKER_HOST}
 port = ${MOONRAKER_PORT}
 # api_key = <grab one or set trusted hosts in moonraker>
-
 [webcam]
 disable_video_streaming = False
-
 # CAUTION: Don't modify the settings below unless you know what you are doing
 #   In most cases webcam configuration will be automatically retrived from moonraker
 #
@@ -214,7 +207,6 @@ disable_video_streaming = False
 # flip_v = False
 # rotate_90 = False
 # aspect_ratio_169 = False
-
 [logging]
 path = ${OBICO_LOG_FILE}
 # level = INFO
@@ -222,10 +214,10 @@ EOF
 }
 
 service_existed() {
-  if [ -f "/etc/systemd/system/${OBICO_SERVICE_NAME}.service" ]; then
+  if [ -f "{$HOME}/.local/share/systemd/user/${OBICO_SERVICE_NAME}.service" ]; then
     if [ $RECREATE_SERVICE = "y" ]; then
       report_status "Stopping ${OBICO_SERVICE_NAME}..."
-      sudo systemctl stop "${OBICO_SERVICE_NAME}"
+      systemctl --user stop "${OBICO_SERVICE_NAME}"
       return 1
     else
       return 0
@@ -237,15 +229,13 @@ service_existed() {
 
 recreate_service() {
   report_status "Creating moonraker-obico systemctl service... You may need to enter password to run sudo."
-  sudo /bin/sh -c "cat > /etc/systemd/system/${OBICO_SERVICE_NAME}.service" <<EOF
+  sudo /bin/sh -c "cat > {$HOME}/.local/share/systemd/user/${OBICO_SERVICE_NAME}.service" <<EOF
 #Systemd service file for moonraker-obico
 [Unit]
 Description=Obico for Moonraker
 After=network-online.target moonraker.service
-
 [Install]
 WantedBy=multi-user.target
-
 [Service]
 Type=simple
 User=${CURRENT_USER}
@@ -255,12 +245,12 @@ Restart=always
 RestartSec=5
 EOF
 
-  sudo systemctl enable "${OBICO_SERVICE_NAME}"
-  sudo systemctl daemon-reload
+  systemctl --user enable "${OBICO_SERVICE_NAME}"
+  systemctl --user daemon-reload
   echo ""
   report_status "${OBICO_SERVICE_NAME} service created and enabled."
   report_status "Launching ${OBICO_SERVICE_NAME} service..."
-  sudo systemctl start "${OBICO_SERVICE_NAME}"
+  systemctl --user start "${OBICO_SERVICE_NAME}"
 }
 
 recreate_update_file() {
@@ -297,13 +287,11 @@ def find(element, json):
         return rv
     except:
         return None
-
 if __name__ == '__main__':
     import sys, json
     ret = find(sys.argv[1], json.load(sys.stdin))
     if ret is None:
         sys.exit(1)
-
     print(ret)
 EOF
 }
@@ -313,18 +301,13 @@ EOF
 exit_on_error() {
   oops
   cat <<EOF
-
 The installation has run into an error:
-
 ${red}${1}${default}
-
 Please fix the error above and re-run this setup script:
-
 -------------------------------------------------------------------------------------------------
 cd ~/moonraker-obico
 ./install.sh
 -------------------------------------------------------------------------------------------------
-
 EOF
   need_help
   exit 1
@@ -336,16 +319,13 @@ unknown_error() {
 
 uninstall() {
   cat <<EOF
-
 To uninstall Obico for Klipper, please run:
-
-sudo systemctl stop "${OBICO_SERVICE_NAME}"
-sudo systemctl disable "${OBICO_SERVICE_NAME}"
-sudo rm "/etc/systemd/system/${OBICO_SERVICE_NAME}.service"
-sudo systemctl daemon-reload
-sudo systemctl reset-failed
-rm -rf ~/moonraker-obico
-
+systemctl --user stop "${OBICO_SERVICE_NAME}"
+systemctl --user disable "${OBICO_SERVICE_NAME}"
+rm "{$HOME}/.local/share/systemd/user/${OBICO_SERVICE_NAME}.service"
+systemctl --user daemon-reload
+systemctl --user reset-failed
+rm -rf "{$HOME}/moonraker-obico"
 EOF
 
   exit 0
@@ -376,7 +356,7 @@ done
 
 
 welcome
-ensure_not_octoprint
+#ensure_not_octoprint
 ensure_deps
 ensure_json_parser
 
